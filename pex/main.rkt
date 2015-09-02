@@ -20,7 +20,7 @@
          fader%)
 
 
-(define-logger device)
+(define-logger pex)
 
 
 (define-type Bank%
@@ -99,13 +99,13 @@
     (define/public (command head body)
       (with-semaphore lock
         (let ((str (string-append "\x01" head "\x02" body "\x17\x03")))
-          (log-device-debug "-> ~a ~a" head body)
+          (log-pex-debug "-> ~a ~a" head body)
           (write-string str out)
           (flush-output out))
 
         (let/ec return : (U False String)
           (unless (sync/timeout 0.05 in)
-            (log-device-debug "<- no reply")
+            (log-pex-debug "<- no reply")
             (return #f))
 
           (define reply
@@ -116,7 +116,7 @@
 
           (match (car reply)
             ((regexp-parts #"\x01(.*?)\x02(.*?)\x17\x03" (_ head body))
-             (log-device-debug "<- ~s ~s" head body)
+             (log-pex-debug "<- ~s ~s" head body)
              (bytes->string/utf-8 body))))))
 
 
