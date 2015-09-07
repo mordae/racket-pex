@@ -30,17 +30,17 @@
 
     (command (-> String String (U False String)))
 
-    (list-relays (-> (Listof Natural)))
-    (list-faders (-> (Listof Natural)))
+    (list-relays (-> (Listof Positive-Integer)))
+    (list-faders (-> (Listof Positive-Integer)))
 
-    (get-relay (-> Natural (Instance Relay%)))
-    (get-fader (-> Natural (Instance Fader%)))))
+    (get-relay (-> Positive-Integer (Instance Relay%)))
+    (get-fader (-> Positive-Integer (Instance Fader%)))))
 
 
 (define-type Relay%
   (Class
     (init-field (bank (Instance Bank%))
-                (id Natural))
+                (id Positive-Integer))
 
     (get-status (-> String))
 
@@ -51,7 +51,7 @@
 (define-type Fader%
   (Class
     (init-field (bank (Instance Bank%))
-                (id Natural))
+                (id Positive-Integer))
 
     (get-status (-> String))
 
@@ -84,21 +84,21 @@
     (define lock
       (make-semaphore 1))
 
-    (define relays : (HashTable Natural (Instance Relay%))
+    (define relays : (HashTable Positive-Integer (Instance Relay%))
       (make-hash))
 
-    (define faders : (HashTable Natural (Instance Fader%))
+    (define faders : (HashTable Positive-Integer (Instance Fader%))
       (make-hash))
 
 
     (begin
-      (for ((relay-id : Natural (in-range 1 97)))
+      (for ((relay-id : Positive-Integer (in-range 1 97)))
         (let ((relay (new relay% (bank this) (id relay-id))))
           (with-handlers ((exn:fail? void))
             (when (send relay get-status)
               (hash-set! relays relay-id relay)))))
 
-      (for ((fader-id : Natural (in-range 1 33)))
+      (for ((fader-id : Positive-Integer (in-range 1 33)))
         (let ((fader (new fader% (bank this) (id fader-id))))
           (with-handlers ((exn:fail? void))
             (when (send fader get-status)
