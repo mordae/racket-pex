@@ -42,6 +42,8 @@
     (init-field (bank (Instance Bank%))
                 (id Natural))
 
+    (get-status (-> String))
+
     (get-on? (-> Boolean))
     (set-on! (-> Boolean Void))))
 
@@ -51,8 +53,11 @@
     (init-field (bank (Instance Bank%))
                 (id Natural))
 
+    (get-status (-> String))
+
     (get-level (-> Natural))
-    (set-level! (-> Natural Void))))
+    (set-level! (-> Natural Void))
+    (fade-to-level! (-> Natural Void))))
 
 
 (: pex-connect (-> Path-String (values Input-Port Output-Port)))
@@ -87,13 +92,17 @@
 
 
     (begin
-      (for ((relay-id 100))
-        (when (relay-status relay-id)
-          (let ((relay (new relay% (bank this) (id relay-id))))
-            (hash-set! relays relay-id relay)))))
+      (for ((relay-id : Natural (in-range 1 97)))
+        (let ((relay (new relay% (bank this) (id relay-id))))
+          (with-handlers ((exn:fail? void))
+            (when (send relay get-status)
+              (hash-set! relays relay-id relay)))))
 
-
-    ;; TODO: look for faders
+      (for ((fader-id : Natural (in-range 1 33)))
+        (let ((fader (new fader% (bank this) (id fader-id))))
+          (with-handlers ((exn:fail? void))
+            (when (send fader get-status)
+              (hash-set! faders fader-id fader))))))
 
 
     (define/public (command head body)
@@ -118,12 +127,6 @@
             ((regexp-parts #"\x01(.*?)\x02(.*?)\x17\x03" (_ head body))
              (log-pex-debug "<- ~s ~s" head body)
              (bytes->string/utf-8 body))))))
-
-
-    (: relay-status (-> Natural (U Boolean String)))
-    (define/private (relay-status relay-id)
-      (let ((str-id (~a relay-id #:width 2 #:pad-string "0" #:align 'right)))
-        (command (format "?d~a~a" id str-id) "000003")))
 
 
     (define/public (get-relay id)
@@ -152,11 +155,11 @@
     (init-field bank id)
 
     (: get-status (-> String))
-    (define/private (get-status)
+    (define/public (get-status)
       (let* ((bank-id (get-field id bank))
              (str-id (~a id #:width 2 #:pad-string "0" #:align 'right))
              (head (format "?d~a~a" bank-id str-id))
-             (status (send bank command head "000003")))
+             (status (send bank command head "000099")))
         (unless status
           (error 'get-status "invalid relay"))
         (values status)))
@@ -191,11 +194,47 @@
   (class object%
     (init-field bank id)
 
+    (define/public (get-status)
+      (let* ((bank-id (get-field id bank))
+             (str-id (~a id #:width 2 #:pad-string "0" #:align 'right))
+             (head (format "?f~a~a" bank-id str-id))
+             (status (send bank command head "000099")))
+        (unless status
+          (error 'get-status "invalid fader"))
+        (values status)))
+
     (define/public (get-level)
-      0)
+      (let ((level (string->number (substring (get-status) 3 5))))
+        (cast level Natural)))
 
     (define/public (set-level! v)
-      (void))
+      (when (> v 99)
+        (set! v 99))
+
+      (let* ((bank-id (get-field id bank))
+             (str-level (~a v #:width 2 #:pad-string "0" #:align 'right))
+             (head (format "f~a0" str-level))
+             (body (make-string 33 #\/)))
+        (string-set! body 0 (integer->char (+ #x30 bank-id)))
+        (string-set! body id #\3)
+        (void
+          (send bank command head body))))
+
+    (define/public (fade-to-level! v)
+      (when (> v 99)
+        (set! v 99))
+
+      (define direction
+        (if (> v (get-level)) #\) #\())
+
+      (let* ((bank-id (get-field id bank))
+             (str-level (~a v #:width 2 #:pad-string "0" #:align 'right))
+             (head (format "f~a0010" str-level))
+             (body (make-string 33 #\/)))
+        (string-set! body 0 (integer->char (+ #x30 bank-id)))
+        (string-set! body id direction)
+        (void
+          (send bank command head body))))
 
     (super-new)))
 
