@@ -12,6 +12,9 @@
          mordae/syntax
          libserialport)
 
+(require/typed pex/regexp-read
+  (regexp-match-bytes-evt (-> Bytes Input-Port (Evtof (U EOF False Bytes)))))
+
 (provide Bank%
          Relay%
          Fader%
@@ -105,25 +108,41 @@
               (hash-set! faders fader-id fader))))))
 
 
+    (: drain-leftover-data (-> Void))
+    (define/private (drain-leftover-data)
+      (when (sync/timeout 0.01 in)
+        (read-byte in)
+        (drain-leftover-data)))
+
+
     (define/public (command head body)
       (with-semaphore lock
+        (drain-leftover-data)
+
         (let ((str (string-append "\x01" head "\x02" body "\x17\x03")))
           (log-pex-debug "-> ~a ~a" head body)
           (write-string str out)
           (flush-output out))
 
         (let/ec return : (U False String)
-          (unless (sync/timeout 0.05 in)
+          (define reply-evt : (Evtof (U EOF False Bytes))
+            (regexp-match-bytes-evt #"\x01[\x01-\x7f]*?\x03" in))
+
+          (define reply : (U EOF False Bytes)
+            (sync/timeout 0.05 reply-evt))
+
+          (when (eof-object? reply)
+            (error 'command "unexpected end-of-file"))
+
+          (when (sync/timeout 0 in)
+            (log-pex-error "<- corrupted reply, retrying")
+            (return (command head body)))
+
+          (unless reply
             (log-pex-debug "<- no reply")
             (return #f))
 
-          (define reply
-            (regexp-match #"\x01.*?\x03" in))
-
-          (unless reply
-            (error 'command "protocol error"))
-
-          (match (car reply)
+          (match reply
             ((regexp-parts #"\x01(.*?)\x02(.*?)\x17\x03" (_ head body))
              (log-pex-debug "<- ~s ~s" head body)
              (bytes->string/utf-8 body))))))
