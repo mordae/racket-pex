@@ -127,7 +127,7 @@
 
           (let/ec return : (U False String)
             (define reply-evt : (Evtof (U EOF False Bytes))
-              (regexp-match-bytes-evt #"\x01[\x01-\x7f]*\x03" in))
+              (regexp-match-bytes-evt #"\x01[\x01-\x7f]*?\x03" in))
 
             (define reply : (U EOF False Bytes)
               (sync/timeout 0.05 reply-evt))
@@ -135,11 +135,11 @@
             (when (eof-object? reply)
               (error 'command "unexpected end-of-file"))
 
-            (when (sync/timeout 0 in)
-              (log-pex-error "<- corrupted reply, retrying")
-              (return (retry)))
-
             (unless reply
+              (when (sync/timeout 0 in)
+                (log-pex-error "<- corrupted reply, retrying")
+                (return (retry)))
+
               (log-pex-debug "<- no reply")
               (return #f))
 
