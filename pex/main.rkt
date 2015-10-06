@@ -117,7 +117,7 @@
 
     (define/public (command head body)
       (with-semaphore lock
-        (let retry ()
+        (let retry : (U False String) ()
           (drain-leftover-data)
 
           (let ((str (string-append "\x01" head "\x02" body "\x17\x03")))
