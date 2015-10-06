@@ -117,35 +117,36 @@
 
     (define/public (command head body)
       (with-semaphore lock
-        (drain-leftover-data)
+        (let retry ()
+          (drain-leftover-data)
 
-        (let ((str (string-append "\x01" head "\x02" body "\x17\x03")))
-          (log-pex-debug "-> ~a ~a" head body)
-          (write-string str out)
-          (flush-output out))
+          (let ((str (string-append "\x01" head "\x02" body "\x17\x03")))
+            (log-pex-debug "-> ~a ~a" head body)
+            (write-string str out)
+            (flush-output out))
 
-        (let/ec return : (U False String)
-          (define reply-evt : (Evtof (U EOF False Bytes))
-            (regexp-match-bytes-evt #"\x01[\x01-\x7f]*?\x03" in))
+          (let/ec return : (U False String)
+            (define reply-evt : (Evtof (U EOF False Bytes))
+              (regexp-match-bytes-evt #"\x01[\x01-\x7f]*\x03" in))
 
-          (define reply : (U EOF False Bytes)
-            (sync/timeout 0.05 reply-evt))
+            (define reply : (U EOF False Bytes)
+              (sync/timeout 0.05 reply-evt))
 
-          (when (eof-object? reply)
-            (error 'command "unexpected end-of-file"))
+            (when (eof-object? reply)
+              (error 'command "unexpected end-of-file"))
 
-          (when (sync/timeout 0 in)
-            (log-pex-error "<- corrupted reply, retrying")
-            (return (command head body)))
+            (when (sync/timeout 0 in)
+              (log-pex-error "<- corrupted reply, retrying")
+              (return (retry)))
 
-          (unless reply
-            (log-pex-debug "<- no reply")
-            (return #f))
+            (unless reply
+              (log-pex-debug "<- no reply")
+              (return #f))
 
-          (match reply
-            ((regexp-parts #"\x01(.*?)\x02(.*?)\x17\x03" (_ head body))
-             (log-pex-debug "<- ~s ~s" head body)
-             (bytes->string/utf-8 body))))))
+            (match reply
+              ((regexp-parts #"\x01(.*?)\x02(.*?)\x17\x03" (_ head body))
+               (log-pex-debug "<- ~s ~s" head body)
+               (bytes->string/utf-8 body)))))))
 
 
     (define/public (get-relay id)
