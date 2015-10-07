@@ -111,8 +111,8 @@
     (: drain-leftover-data (-> Void))
     (define/private (drain-leftover-data)
       (when (sync/timeout 0.01 in)
-        (read-byte in)
-        (drain-leftover-data)))
+        (unless (eof-object? (read-byte in))
+          (drain-leftover-data))))
 
 
     (define/public (command head body)
