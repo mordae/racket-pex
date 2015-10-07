@@ -110,9 +110,13 @@
 
     (: drain-leftover-data (-> Void))
     (define/private (drain-leftover-data)
-      (when (sync/timeout 0.01 in)
-        (unless (eof-object? (read-byte in))
-          (drain-leftover-data))))
+      (let* ((bstr (make-bytes 256))
+             (len (read-bytes-avail!* bstr in)))
+        (unless (or (eof-object? len)
+                    (procedure? len))
+          (when (> len 0)
+            (log-pex-warning "<- discarded ~s" (subbytes bstr 0 len))
+            (drain-leftover-data)))))
 
 
     (define/public (command head body)
@@ -121,7 +125,7 @@
           (drain-leftover-data)
 
           (let ((str (string-append "\x01" head "\x02" body "\x17\x03")))
-            (log-pex-debug "-> ~a ~a" head body)
+            (log-pex-info "-> ~a ~a" head body)
             (write-string str out)
             (flush-output out))
 
@@ -140,12 +144,12 @@
                 (log-pex-error "<- corrupted reply, retrying")
                 (return (retry)))
 
-              (log-pex-debug "<- no reply")
+              (log-pex-info "<- no reply")
               (return #f))
 
             (match reply
               ((regexp-parts #"\x01(.*?)\x02(.*?)\x17\x03" (_ head body))
-               (log-pex-debug "<- ~s ~s" head body)
+               (log-pex-info "<- ~s ~s" head body)
                (bytes->string/utf-8 body)))))))
 
 
