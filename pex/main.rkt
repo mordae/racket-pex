@@ -197,7 +197,8 @@
              (head (format "d~a00" (integer->char (+ #x40 bank-id))))
              (body (make-string 32 #\0)))
 
-        ;; Flip correct on or off bit.
+        ;; Flip correct bit in the "on" (base-0) or "off" (base-16) section
+        ;; of the message. This allows us to not touch other relays.
         (string-set! body
                      (+ (if v 0 16) slot)
                      (integer->char (+ #x30 mask)))
